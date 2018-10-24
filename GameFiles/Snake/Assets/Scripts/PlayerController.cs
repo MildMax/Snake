@@ -2,33 +2,40 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
-[System.Serializable]
-public class Boundary
-{
-    public float xMin, xMax, yMin, yMax;
-}
-
 public class PlayerController : MonoBehaviour {
 
-    public Boundary boundary;
-
     Rigidbody body;
+
     public GameObject bodies;
-    List<GameObject> bodyList;
+    public List<GameObject> bodyList;
 
-    private int currentDirection = 2;
+    private int currentDirection;
+    public int dir = 2;
+    private int oldMove = 3;
 
-    private float nextMove = 1;
+    public float moveTime;
+    private float nextMove;
+
+    private Vector3 prevHead;
+    private Vector3 newBody;
+    private Vector3 oldBody;
+
+    private GameController gameController;
+    public GameObject game;
 
 	// Use this for initialization
 	void Start () {
         body = GetComponent<Rigidbody>();
+        nextMove = moveTime;
+        gameController = game.GetComponent<GameController>();
+        bodyList.Add(Instantiate(bodies, new Vector3(0.5f, -0.5f, 0), Quaternion.identity));
+        gameController.generateFood();
 	}
 	
 	// Update is called once per frame
 	void Update () {
         int currentDirection = determineDirection();
-        if (nextMove >= 0.75f)
+        if (nextMove >= moveTime)
         {
             autoMove(currentDirection);
             nextMove = 0f;
@@ -36,23 +43,23 @@ public class PlayerController : MonoBehaviour {
         nextMove = nextMove + Time.deltaTime;
     }
 
-    public int dir = 2;
+    
 
     public int determineDirection()
     {
-        if (Input.GetAxisRaw("Horizontal") == 1)
+        if (Input.GetAxisRaw("Horizontal") == 1 && oldMove != 1)
         {
             dir = 0;
         }
-        else if (Input.GetAxisRaw("Horizontal") == -1)
+        else if (Input.GetAxisRaw("Horizontal") == -1 && oldMove != 0)
         {
             dir = 1;
         }
-        else if (Input.GetAxisRaw("Vertical") == 1)
+        else if (Input.GetAxisRaw("Vertical") == 1 && oldMove != 3)
         {
             dir = 2;
         }
-        else if (Input.GetAxisRaw("Vertical") == -1)
+        else if (Input.GetAxisRaw("Vertical") == -1 && oldMove != 2)
         {
             dir = 3;
         }
@@ -61,51 +68,72 @@ public class PlayerController : MonoBehaviour {
 
     public void autoMove(int move)
     {
+
+        prevHead = body.position;
+
         if (move == 0)
         {
-            body.position = new Vector3(
-                Mathf.Clamp(transform.position.x + 1, boundary.xMin, boundary.xMax),
-                Mathf.Clamp(transform.position.y, boundary.yMin, boundary.yMax),
-                transform.position.z);
+            body.position = new Vector3(transform.position.x + 1, transform.position.y, transform.position.z);
         }
         else if (move == 1)
         {
-            body.position = new Vector3(
-                Mathf.Clamp(transform.position.x - 1, boundary.xMin, boundary.xMax),
-                Mathf.Clamp(transform.position.y, boundary.yMin, boundary.yMax),
-                transform.position.z);
+            body.position = new Vector3(transform.position.x - 1, transform.position.y, transform.position.z);
         }
         else if (move == 2)
         {
-            body.position = new Vector3(
-                Mathf.Clamp(transform.position.x, boundary.xMin, boundary.xMax),
-                Mathf.Clamp(transform.position.y + 1, boundary.yMin, boundary.yMax),
-                transform.position.z);
+            body.position = new Vector3(transform.position.x, transform.position.y + 1, transform.position.z);
         }
         else if (move == 3)
         {
-            body.position = new Vector3(
-                Mathf.Clamp(transform.position.x, boundary.xMin, boundary.xMax),
-                Mathf.Clamp(transform.position.y - 1, boundary.yMin, boundary.yMax),
-                transform.position.z);
+            body.position = new Vector3(transform.position.x, transform.position.y - 1, transform.position.z);
+        }
+        oldMove = move;
+        moveBody();
+    }
+
+    public void moveBody()
+    {
+        for (int i = 0; i != bodyList.Count; ++i)
+        {        
+            if (i == 0)
+            {
+                //Debug.Log("primary move accessed.");
+                oldBody = bodyList[i].transform.position;
+                bodyList[i].transform.position = prevHead;
+            }
+            else
+            {
+                //Debug.Log(i + " move accessed.");
+                newBody = oldBody;
+                oldBody = bodyList[i].transform.position;
+                bodyList[i].transform.position = newBody;
+            }
         }
     }
 
-    public Vector3 determineDir(int daDir, int daSize)
+    public void add()
     {
-        Vector3 temp;
-        if (daDir == 0)
+        if (bodyList.Count == 0)
         {
-            temp = new Vector3(bodyList[daSize-1].transform.position.x - 1)
+            bodyList.Add(Instantiate(bodies, prevHead, Quaternion.identity));
         }
-        return temp;
+        else
+        {
+            bodyList.Add(Instantiate(bodies, oldBody, Quaternion.identity));
+        }
+        gameController.generateFood();
     }
 
-    public void addToList()
+    private void OnTriggerEnter(Collider other)
     {
-        int sz = bodyList.Count;
-        GameObject temp = bodyList[sz - 1];
-        GameObject newBody = Instantiate(bodies, new Vector3(bodyList[sz - 1].transform.position.x), Quaternion.identity);
-        bodyList.Add(newBody);
+        if (other.CompareTag("Food"))
+        {
+            add();
+            gameController.addScore();
+        }
+        else if (other.CompareTag("Body"))
+        {
+            gameController.gameOver = true;
+        }
     }
 }
